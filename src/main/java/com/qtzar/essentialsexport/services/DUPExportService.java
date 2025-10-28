@@ -204,7 +204,11 @@ public class DUPExportService {
             instancesByClass.computeIfAbsent(className, k -> new ArrayList<>()).add(instance);
         }
 
-        // Generate script for each class
+        // FIRST PASS: Create all instances with just the name field
+        script.append("# ========================================\n");
+        script.append("# FIRST PASS: Create all instances\n");
+        script.append("# ========================================\n\n");
+
         for (Map.Entry<String, List<Map<String, Object>>> entry : instancesByClass.entrySet()) {
             String className = entry.getKey();
             List<Map<String, Object>> instances = entry.getValue();
@@ -215,6 +219,44 @@ public class DUPExportService {
             }
 
             script.append("# Class: ").append(className).append(" (").append(instances.size()).append(" instances)\n");
+
+            for (Map<String, Object> instanceMap : instances) {
+                String originalId = (String) instanceMap.get("id");
+                String instanceName = (String) instanceMap.get("name");
+
+                if (originalId == null) {
+                    continue;
+                }
+
+                // Get transformed ID
+                String transformedId = idMapping.getOrDefault(originalId, originalId);
+
+                // EssentialGetInstance call with transformed ID - only name field
+                script.append("Record=EssentialGetInstance('").append(className).append("', ");
+                script.append("u'").append(escapeForJython(transformedId)).append("', ");
+                script.append("u'").append(escapeForJython(instanceName != null ? instanceName : "")).append("', ");
+                script.append("u'").append(escapeForJython(transformedId)).append("', ");
+                script.append("u'").append(request.getExternalRepositoryName()).append("')\n");
+            }
+
+            script.append("\n");
+        }
+
+        // SECOND PASS: Populate all fields for each instance
+        script.append("# ========================================\n");
+        script.append("# SECOND PASS: Populate all fields\n");
+        script.append("# ========================================\n\n");
+
+        for (Map.Entry<String, List<Map<String, Object>>> entry : instancesByClass.entrySet()) {
+            String className = entry.getKey();
+            List<Map<String, Object>> instances = entry.getValue();
+            List<String> selectedFields = classFieldsMap.get(className);
+
+            if (selectedFields == null || selectedFields.isEmpty()) {
+                continue;
+            }
+
+            script.append("# Class: ").append(className).append(" - Adding fields\n");
             script.append("# Requested fields: ").append(String.join(", ", selectedFields)).append("\n");
 
             for (Map<String, Object> instanceMap : instances) {
@@ -228,7 +270,7 @@ public class DUPExportService {
                 // Get transformed ID
                 String transformedId = idMapping.getOrDefault(originalId, originalId);
 
-                // EssentialGetInstance call with transformed ID
+                // Get the instance again
                 script.append("\nRecord=EssentialGetInstance('").append(className).append("', ");
                 script.append("u'").append(escapeForJython(transformedId)).append("', ");
                 script.append("u'").append(escapeForJython(instanceName != null ? instanceName : "")).append("', ");

@@ -19,6 +19,7 @@ let totalPages = 0;
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('repoName').addEventListener('input', validateForm);
     loadRepositories();
+    validateForm(); // Initialize button states
 });
 
 /**
@@ -504,9 +505,9 @@ function validateForm() {
     const saveBtn = document.getElementById('saveBtn');
     saveBtn.disabled = !hasSelectedFields;
 
-    // Enable load button only if a repository has been selected
+    // Enable load button always (no need to have repository loaded)
     const loadBtn = document.getElementById('loadBtn');
-    loadBtn.disabled = !selectedRepoId;
+    loadBtn.disabled = false;
 }
 
 /**
@@ -725,6 +726,8 @@ function saveSelection() {
             id: selectedRepoId,
             name: repositories.find(r => r.repoId === selectedRepoId)?.name || selectedRepoId
         },
+        externalRepositoryName: document.getElementById('repoName').value.trim(),
+        idPrefix: document.getElementById('idPrefix').value.trim(),
         classSelections: []
     };
 
@@ -764,11 +767,6 @@ function saveSelection() {
  * Load a previously saved selection from a JSON file
  */
 function loadSelection() {
-    if (!selectedRepoId) {
-        showStatus('Please select a repository first', 'error');
-        return;
-    }
-
     // Create file input
     const input = document.createElement('input');
     input.type = 'file';
@@ -785,6 +783,39 @@ function loadSelection() {
             // Validate format
             if (!selection.version || !selection.classSelections || !Array.isArray(selection.classSelections)) {
                 throw new Error('Invalid selection file format');
+            }
+
+            // Restore external repository name and ID prefix
+            if (selection.externalRepositoryName) {
+                document.getElementById('repoName').value = selection.externalRepositoryName;
+            }
+            if (selection.idPrefix) {
+                document.getElementById('idPrefix').value = selection.idPrefix;
+            }
+
+            // If we don't have a repository loaded, or if the saved repository doesn't match
+            // the current one, we need to load the repository first
+            const savedRepoId = selection.repository?.id;
+
+            if (!selectedRepoId || selectedRepoId !== savedRepoId) {
+                // Try to select the saved repository
+                if (savedRepoId) {
+                    const repoSelect = document.getElementById('repoSelect');
+                    const repoOption = Array.from(repoSelect.options).find(opt => opt.value === savedRepoId);
+
+                    if (repoOption) {
+                        repoSelect.value = savedRepoId;
+                        selectedRepoId = savedRepoId;
+                        // Load classes for this repository
+                        await loadAvailableClasses();
+                    } else {
+                        showStatus(`⚠️ Repository "${selection.repository?.name || savedRepoId}" not found. Please select the correct repository manually.`, 'warning');
+                        return;
+                    }
+                } else {
+                    showStatus('⚠️ No repository information in saved file. Please select a repository first.', 'warning');
+                    return;
+                }
             }
 
             // Validate and load selections
