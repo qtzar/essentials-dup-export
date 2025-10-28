@@ -97,16 +97,12 @@ public class EASClient {
     public Object getClassesMetadata(String repoId) {
         checkAuth();
 
-        try {
-            return easRestClient.get()
-                    .uri("/essential-utility/v3/repositories/" + repoId + "/classes/meta-data")
-                    .header("Authorization",  authToken)
-                    .header("x-api-key", apiKey)
-                    .retrieve()
-                    .body(Object.class);
-        } catch (Exception e) {
-            throw e;
-        }
+        return easRestClient.get()
+                .uri("/essential-utility/v3/repositories/" + repoId + "/classes/meta-data")
+                .header("Authorization",  authToken)
+                .header("x-api-key", apiKey)
+                .retrieve()
+                .body(Object.class);
     }
 
     /**
