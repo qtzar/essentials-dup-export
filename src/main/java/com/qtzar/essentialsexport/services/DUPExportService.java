@@ -197,14 +197,24 @@ public class DUPExportService {
         // Define external repository
         script.append("defineExternalRepository(\"").append(request.getExternalRepositoryName()).append("\", \"\")\n\n");
 
-        // Step 4: Group instances by class and generate script
+        // Step 4: Group instances by class and create record variable mapping
         Map<String, List<Map<String, Object>>> instancesByClass = new LinkedHashMap<>();
+        Map<String, String> idToRecordVar = new HashMap<>(); // Maps original ID to record variable name
+        int recordCounter = 1;
+
         for (Map<String, Object> instance : allInstances.values()) {
             String className = (String) instance.get("className");
             instancesByClass.computeIfAbsent(className, k -> new ArrayList<>()).add(instance);
+
+            // Create unique record variable for this instance
+            String originalId = (String) instance.get("id");
+            if (originalId != null) {
+                String recordVarName = "Record_" + recordCounter++;
+                idToRecordVar.put(originalId, recordVarName);
+            }
         }
 
-        // FIRST PASS: Create all instances with just the name field
+        // FIRST PASS: Create all instances and set name field
         script.append("# ========================================\n");
         script.append("# FIRST PASS: Create all instances\n");
         script.append("# ========================================\n\n");
@@ -228,21 +238,26 @@ public class DUPExportService {
                     continue;
                 }
 
-                // Get transformed ID
+                // Get transformed ID and record variable name
                 String transformedId = idMapping.getOrDefault(originalId, originalId);
+                String recordVarName = idToRecordVar.get(originalId);
 
-                // EssentialGetInstance call with transformed ID - only name field
-                script.append("Record=EssentialGetInstance('").append(className).append("', ");
+                // Create instance
+                script.append(recordVarName).append("=EssentialGetInstance('").append(className).append("', ");
                 script.append("u'").append(escapeForJython(transformedId)).append("', ");
                 script.append("u'").append(escapeForJython(instanceName != null ? instanceName : "")).append("', ");
                 script.append("u'").append(escapeForJython(transformedId)).append("', ");
                 script.append("u'").append(request.getExternalRepositoryName()).append("')\n");
+
+                // Immediately set the name field
+                script.append("addIfNotThere(").append(recordVarName).append(", 'name', ");
+                script.append("u'").append(escapeForJython(instanceName != null ? instanceName : "")).append("')\n");
             }
 
             script.append("\n");
         }
 
-        // SECOND PASS: Populate all fields for each instance
+        // SECOND PASS: Populate all other fields for each instance
         script.append("# ========================================\n");
         script.append("# SECOND PASS: Populate all fields\n");
         script.append("# ========================================\n\n");
@@ -257,33 +272,28 @@ public class DUPExportService {
             }
 
             script.append("# Class: ").append(className).append(" - Adding fields\n");
-            script.append("# Requested fields: ").append(String.join(", ", selectedFields)).append("\n");
+            script.append("# Requested fields: ").append(String.join(", ", selectedFields)).append("\n\n");
 
             for (Map<String, Object> instanceMap : instances) {
                 String originalId = (String) instanceMap.get("id");
-                String instanceName = (String) instanceMap.get("name");
 
                 if (originalId == null) {
                     continue;
                 }
 
-                // Get transformed ID
-                String transformedId = idMapping.getOrDefault(originalId, originalId);
+                String recordVarName = idToRecordVar.get(originalId);
 
-                // Get the instance again
-                script.append("\nRecord=EssentialGetInstance('").append(className).append("', ");
-                script.append("u'").append(escapeForJython(transformedId)).append("', ");
-                script.append("u'").append(escapeForJython(instanceName != null ? instanceName : "")).append("', ");
-                script.append("u'").append(escapeForJython(transformedId)).append("', ");
-                script.append("u'").append(request.getExternalRepositoryName()).append("')\n");
-
-                // Add each selected field with ID transformation
+                // Add each selected field (skip 'name' as it was already added in first pass)
                 for (String fieldName : selectedFields) {
+                    if ("name".equals(fieldName)) {
+                        continue; // Skip name field, already added in first pass
+                    }
+
                     Object fieldValue = instanceMap.get(fieldName);
 
                     if (fieldValue != null) {
-                        String valueStr = transformIdsInValue(fieldValue, idMapping);
-                        script.append("addIfNotThere(Record, '").append(fieldName).append("', ");
+                        String valueStr = transformIdsInValue(fieldValue, idMapping, idToRecordVar);
+                        script.append("addIfNotThere(").append(recordVarName).append(", '").append(fieldName).append("', ");
                         script.append(valueStr).append(")\n");
                     }
                 }
@@ -357,19 +367,26 @@ public class DUPExportService {
 
     /**
      * Transform IDs within a field value (handles strings, lists, maps).
-     * Replaces any occurrence of old IDs with new IDs.
+     * When a value is a reference to another instance, uses the record variable instead of ID string.
      *
      * @param value The field value
      * @param idMapping Map from original ID to transformed ID
-     * @return Jython-formatted string with transformed IDs
+     * @param idToRecordVar Map from original ID to record variable name
+     * @return Jython-formatted string with record variables for instance references
      */
-    private String transformIdsInValue(Object value, Map<String, String> idMapping) {
+    private String transformIdsInValue(Object value, Map<String, String> idMapping, Map<String, String> idToRecordVar) {
         switch (value) {
             case null -> {
                 return "None";
             }
             case String strValue -> {
-                // Replace all occurrences of mapped IDs in the string
+                // Check if this string is an instance ID that we have a record variable for
+                if (idToRecordVar.containsKey(strValue)) {
+                    // Return the record variable name directly (no quotes)
+                    return idToRecordVar.get(strValue);
+                }
+
+                // Otherwise, replace all occurrences of mapped IDs in the string
                 for (Map.Entry<String, String> entry : idMapping.entrySet()) {
                     strValue = strValue.replace(entry.getKey(), entry.getValue());
                 }
@@ -381,7 +398,7 @@ public class DUPExportService {
                 StringBuilder sb = new StringBuilder("[");
                 for (int i = 0; i < list.size(); i++) {
                     if (i > 0) sb.append(", ");
-                    sb.append(transformIdsInValue(list.get(i), idMapping));
+                    sb.append(transformIdsInValue(list.get(i), idMapping, idToRecordVar));
                 }
                 sb.append("]");
                 return sb.toString();
@@ -394,6 +411,11 @@ public class DUPExportService {
                 if (map.containsKey("id") && map.size() <= 2) {
                     String refId = (String) map.get("id");
                     if (refId != null) {
+                        // Use record variable if available
+                        if (idToRecordVar.containsKey(refId)) {
+                            return idToRecordVar.get(refId);
+                        }
+                        // Otherwise use transformed ID as string
                         String transformedRefId = idMapping.getOrDefault(refId, refId);
                         return "u'" + escapeForJython(transformedRefId) + "'";
                     }
@@ -406,7 +428,7 @@ public class DUPExportService {
                     if (!first) sb.append(", ");
                     first = false;
                     sb.append("'").append(escapeForJython(entry.getKey())).append("': ");
-                    sb.append(transformIdsInValue(entry.getValue(), idMapping));
+                    sb.append(transformIdsInValue(entry.getValue(), idMapping, idToRecordVar));
                 }
                 sb.append("}");
                 return sb.toString();
