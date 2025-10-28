@@ -5,7 +5,6 @@ import com.qtzar.essentialsexport.model.dup.ClassSelection;
 import com.qtzar.essentialsexport.model.dup.DUPExportRequest;
 import com.qtzar.essentialsexport.model.dup.FieldSelection;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
@@ -23,7 +22,6 @@ import java.util.zip.ZipOutputStream;
  * Service for generating DUP (Data Update Package) export files.
  * Creates jython scripts and packages them with supporting files into a .dup archive.
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DUPExportService {
@@ -38,7 +36,6 @@ public class DUPExportService {
      * @throws IOException if there's an error generating the export
      */
     public byte[] generateDUPExport(DUPExportRequest request) throws IOException {
-        log.info("Generating DUP export for repository: {}", request.getExternalRepositoryName());
 
         // Generate the jython script
         String jythonScript = generateJythonScript(request);
@@ -48,14 +45,12 @@ public class DUPExportService {
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
 
             // Add the generated jython script as dup_import_script.py
-            addStringToZip(zos, jythonScript, "dup_import_script.py");
+            addStringToZip(zos, jythonScript);
 
             // Add all predefined support files from resources/dupsupport
             addDupSupportFiles(zos);
         }
 
-        log.info("DUP export generated successfully: {} classes",
-                request.getClassSelections().stream().filter(ClassSelection::isSelected).count());
 
         return baos.toByteArray();
     }
@@ -76,7 +71,6 @@ public class DUPExportService {
                 if (resource.isReadable()) {
                     String filename = resource.getFilename();
                     if (filename != null) {
-                        log.debug("Adding support file to DUP: {}", filename);
                         try (InputStream is = resource.getInputStream()) {
                             addStreamToZip(zos, is, filename);
                         }
@@ -84,10 +78,7 @@ public class DUPExportService {
                 }
             }
 
-            log.info("Added {} support files to DUP export", resources.length);
-
         } catch (Exception e) {
-            log.error("Error adding support files to DUP export", e);
             throw new IOException("Failed to add support files", e);
         }
     }
@@ -95,13 +86,12 @@ public class DUPExportService {
     /**
      * Add a string content as a file to the zip.
      *
-     * @param zos The zip output stream
+     * @param zos     The zip output stream
      * @param content The string content
-     * @param entryName The name of the entry in the zip file
      * @throws IOException if there's an error adding the content
      */
-    private void addStringToZip(ZipOutputStream zos, String content, String entryName) throws IOException {
-        ZipEntry zipEntry = new ZipEntry(entryName);
+    private void addStringToZip(ZipOutputStream zos, String content) throws IOException {
+        ZipEntry zipEntry = new ZipEntry("dup_import_script.py");
         zos.putNextEntry(zipEntry);
 
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
@@ -158,8 +148,6 @@ public class DUPExportService {
 
             classFieldsMap.put(className, selectedFields);
 
-            log.info("Fetching instances for class: {} with fields: {}", className, selectedFields);
-
             // Build slots parameter for API call
             List<String> allSlots = new ArrayList<>();
             allSlots.add("id");
@@ -176,7 +164,6 @@ public class DUPExportService {
 
             try {
                 var instances = easClient.getAllInstancesAsMap(request.getRepoId(), className, 1, slotsParam);
-                log.info("Fetched {} instances for class {} from repo {}", instances.size(), className, request.getRepoId());
 
                 for (Map<String, Object> instance : instances) {
                     String instanceId = (String) instance.get("id");
@@ -184,8 +171,7 @@ public class DUPExportService {
                         allInstances.put(instanceId, instance);
                     }
                 }
-            } catch (Exception e) {
-                log.error("Error fetching instances for class: {}", className, e);
+            } catch (Exception _) {
             }
         }
 
@@ -308,9 +294,6 @@ public class DUPExportService {
             }
         }
 
-        log.info("Found {} IDs already with prefix '{}', used sequences: {}",
-                mapping.size(), prefixWithUnderscore, usedSequences);
-
         // Second pass: transform IDs that don't have the prefix
         int nextSequence = 1;
         for (String id : originalIds) {
@@ -327,9 +310,6 @@ public class DUPExportService {
             }
         }
 
-        log.info("ID mapping created: {} total IDs, {} transformed",
-                originalIds.size(), originalIds.size() - mapping.size() + usedSequences.size());
-
         return mapping;
     }
 
@@ -342,64 +322,64 @@ public class DUPExportService {
      * @return Jython-formatted string with transformed IDs
      */
     private String transformIdsInValue(Object value, Map<String, String> idMapping) {
-        if (value == null) {
-            return "None";
-        }
-
-        if (value instanceof String) {
-            String strValue = (String) value;
-            // Replace all occurrences of mapped IDs in the string
-            for (Map.Entry<String, String> entry : idMapping.entrySet()) {
-                strValue = strValue.replace(entry.getKey(), entry.getValue());
+        switch (value) {
+            case null -> {
+                return "None";
             }
-            return "u'" + escapeForJython(strValue) + "'";
-        }
-
-        if (value instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<Object> list = (List<Object>) value;
-            StringBuilder sb = new StringBuilder("[");
-            for (int i = 0; i < list.size(); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append(transformIdsInValue(list.get(i), idMapping));
-            }
-            sb.append("]");
-            return sb.toString();
-        }
-
-        if (value instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> map = (Map<String, Object>) value;
-
-            // Check if this is a simple reference object with just an 'id' field
-            if (map.containsKey("id") && map.size() <= 2) {
-                String refId = (String) map.get("id");
-                if (refId != null) {
-                    String transformedRefId = idMapping.getOrDefault(refId, refId);
-                    return "u'" + escapeForJython(transformedRefId) + "'";
+            case String strValue -> {
+                // Replace all occurrences of mapped IDs in the string
+                for (Map.Entry<String, String> entry : idMapping.entrySet()) {
+                    strValue = strValue.replace(entry.getKey(), entry.getValue());
                 }
+                return "u'" + escapeForJython(strValue) + "'";
+            }
+            case List list1 -> {
+                @SuppressWarnings("unchecked")
+                List<Object> list = (List<Object>) value;
+                StringBuilder sb = new StringBuilder("[");
+                for (int i = 0; i < list.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(transformIdsInValue(list.get(i), idMapping));
+                }
+                sb.append("]");
+                return sb.toString();
+            }
+            case Map map1 -> {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> map = (Map<String, Object>) value;
+
+                // Check if this is a simple reference object with just an 'id' field
+                if (map.containsKey("id") && map.size() <= 2) {
+                    String refId = (String) map.get("id");
+                    if (refId != null) {
+                        String transformedRefId = idMapping.getOrDefault(refId, refId);
+                        return "u'" + escapeForJython(transformedRefId) + "'";
+                    }
+                }
+
+                // Otherwise, format as a map
+                StringBuilder sb = new StringBuilder("{");
+                boolean first = true;
+                for (Map.Entry<String, Object> entry : map.entrySet()) {
+                    if (!first) sb.append(", ");
+                    first = false;
+                    sb.append("'").append(escapeForJython(entry.getKey())).append("': ");
+                    sb.append(transformIdsInValue(entry.getValue(), idMapping));
+                }
+                sb.append("}");
+                return sb.toString();
             }
 
-            // Otherwise, format as a map
-            StringBuilder sb = new StringBuilder("{");
-            boolean first = true;
-            for (Map.Entry<String, Object> entry : map.entrySet()) {
-                if (!first) sb.append(", ");
-                first = false;
-                sb.append("'").append(escapeForJython(entry.getKey())).append("': ");
-                sb.append(transformIdsInValue(entry.getValue(), idMapping));
+
+            // Handle primitives
+            case Number number -> {
+                return value.toString();
             }
-            sb.append("}");
-            return sb.toString();
-        }
-
-        // Handle primitives
-        if (value instanceof Number) {
-            return value.toString();
-        }
-
-        if (value instanceof Boolean) {
-            return ((Boolean) value) ? "True" : "False";
+            case Boolean b -> {
+                return b ? "True" : "False";
+            }
+            default -> {
+            }
         }
 
         // Default: convert to string and escape

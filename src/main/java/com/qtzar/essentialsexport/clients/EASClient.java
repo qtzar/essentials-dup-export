@@ -3,7 +3,6 @@ package com.qtzar.essentialsexport.clients;
 import com.qtzar.essentialsexport.model.essential.request.BearerTokenBody;
 import com.qtzar.essentialsexport.model.essential.request.RefreshTokenBody;
 import com.qtzar.essentialsexport.model.essential.response.BearerTokenResponse;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -15,25 +14,28 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
-@Slf4j
 @Service
 public class EASClient {
     private final RestClient easRestClient;
 
     @Value("${eas.endpoint}")
     private String endpoint;
+
     @Value("${eas.apiKey}")
     private String apiKey;
+
     @Value("${eas.username}")
     private String username;
+
     @Value("${eas.password}")
     private String password;
+
     private String authToken = "";
     private String refreshToken = "";
     private Instant authExpires = Instant.now().minus(1, ChronoUnit.MINUTES);
     private Instant refreshExpires = Instant.now().minus(1, ChronoUnit.MINUTES);
 
-    public EASClient(@Value("${eas.endpoint}") String endpoint) {
+    public EASClient() {
         easRestClient = RestClient.builder()
                 .baseUrl(endpoint)
                 .defaultHeader("User-Agent", "Essential Export Application")
@@ -53,7 +55,6 @@ public class EASClient {
         BearerTokenResponse response;
 
         if (!refreshToken.isEmpty() && refreshExpires.isBefore(Instant.now().minusSeconds(60))) {
-            log.trace("EAS Client : Using Refresh Token");
             RefreshTokenBody refreshTokenBody = new RefreshTokenBody();
             refreshTokenBody.setGrantType("refresh_token");
             refreshTokenBody.setRefreshToken(refreshToken);
@@ -95,7 +96,6 @@ public class EASClient {
      */
     public Object getClassesMetadata(String repoId) {
         checkAuth();
-        log.debug("EAS Client : Getting classes metadata with slots for repo: {}", repoId);
 
         try {
             return easRestClient.get()
@@ -105,7 +105,6 @@ public class EASClient {
                     .retrieve()
                     .body(Object.class);
         } catch (Exception e) {
-            log.error("Error fetching classes metadata", e);
             throw e;
         }
     }
@@ -130,14 +129,11 @@ public class EASClient {
             endpoint = "/essential-utility/v3/repositories/" + repoId + "/classes/" + instanceType + "/instances?maxdepth=" + depthCount;
         }
 
-        log.debug("EAS API endpoint (raw map): {}", endpoint);
-
         String pagination = "start=0,count=100";
 
         while (pagination != null) {
             pagination = "&" + pagination.replace(",", "&");
             String pagedEndpoint = endpoint + pagination;
-            log.trace("Fetching page: {}", pagedEndpoint);
 
             checkAuth();
 
@@ -146,7 +142,7 @@ public class EASClient {
                     .header("Authorization", authToken)
                     .header("x-api-key", apiKey)
                     .retrieve()
-                    .body(new ParameterizedTypeReference<java.util.Map<String, Object>>() {});
+                    .body(new ParameterizedTypeReference<>() {});
 
             if (response != null && response.containsKey("instances")) {
                 @SuppressWarnings("unchecked")
@@ -160,7 +156,6 @@ public class EASClient {
             }
         }
 
-        log.debug("Fetched {} total instances for class {} from repo {} (as map)", results.size(), instanceType, repoId);
         return results;
     }
 }

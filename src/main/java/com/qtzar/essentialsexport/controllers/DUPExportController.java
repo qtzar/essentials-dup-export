@@ -18,7 +18,6 @@ import java.util.List;
 /**
  * Controller for DUP (Data Update Package) export operations.
  */
-@Slf4j
 @RestController
 @RequestMapping("/api/dup")
 @RequiredArgsConstructor
@@ -36,7 +35,6 @@ public class DUPExportController {
      */
     @PostMapping("/export")
     public ResponseEntity<ByteArrayResource> generateExport(@RequestBody DUPExportRequest request) {
-        log.info("DUP export request received for repository: {}", request.getExternalRepositoryName());
 
         try {
             byte[] dupFile = dupExportService.generateDUPExport(request);
@@ -51,7 +49,6 @@ public class DUPExportController {
                     .body(resource);
 
         } catch (IOException e) {
-            log.error("Error generating DUP export", e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -63,7 +60,6 @@ public class DUPExportController {
      */
     @GetMapping("/repositories")
     public ResponseEntity<List<EASRepositoriesProperties.Repository>> getRepositories() {
-        log.info("Fetching available EAS repositories");
         return ResponseEntity.ok(easRepositoriesProperties.getRepositories());
     }
 
@@ -76,12 +72,10 @@ public class DUPExportController {
      */
     @GetMapping("/classes")
     public ResponseEntity<Object> getClasses(@RequestParam String repoId) {
-        log.info("Fetching EAS classes metadata with slots for repo: {}", repoId);
         try {
             Object classes = easClient.getClassesMetadata(repoId);
             return ResponseEntity.ok(classes);
         } catch (Exception e) {
-            log.error("Error fetching classes metadata for repo: {}", repoId, e);
             return ResponseEntity.internalServerError().build();
         }
     }

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Essential DUP Exporter** is a Spring Boot 3.5 application that exports data from Essential Architecture Studio (EAS) repositories and packages it as DUP (Data Update Package) files. The application provides a web-based interface for selecting classes and fields from EAS repositories, then generates Jython scripts packaged with support files into a .dup (ZIP) archive for import into other EAS instances.
+**Essential DUP Exporter** is a Spring Boot 4.0 application that exports data from Essential Architecture Studio (EAS) repositories and packages it as DUP (Data Update Package) files. The application provides a web-based interface for selecting classes and fields from EAS repositories, then generates Jython scripts packaged with support files into a .dup (ZIP) archive for import into other EAS instances.
 
-**Key Technology**: Java 25, Spring Boot 3.5.6, Maven, Lombok, Apache POI, Thymeleaf
+**Key Technology**: Java 25, Spring Boot 4.0, Maven, Lombok, Apache POI, Thymeleaf
 
 ## Build & Run Commands
 
@@ -40,7 +40,6 @@ mvn clean package -DskipTests
 
 ### Running the Application
 - Access web UI at: `http://localhost:8080`
-- Swagger API docs at: `http://localhost:8080/swagger-ui.html`
 - Spring Boot Actuator: `http://localhost:8080/actuator`
 
 ## Architecture
@@ -137,7 +136,6 @@ The service implements sophisticated ID transformation in `DUPExportService.buil
 
 - **Spring Boot Actuator** - Health checks and metrics
 - **Lombok** - Reduces boilerplate code (@Data, @Slf4j, @RequiredArgsConstructor)
-- **SpringDoc OpenAPI** - API documentation (Swagger UI)
 
 ## Frontend Structure
 

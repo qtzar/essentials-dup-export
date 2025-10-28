@@ -1,0 +1,19 @@
+eas:
+  endpoint: https://test.example.com/api
+  username: test@example.com
+  password: test-password
+  apiKey: test-api-key
+  repositories:
+    - name: "Test Repository"
+      repoId: "test-repo"
+    - name: "Development"
+      repoId: "dev-repo"
+
+spring:
+  main:
+    banner-mode: off
+
+logging:
+  level:
+    root: ERROR
+    com.qtzar.essentialsexport: ERROR

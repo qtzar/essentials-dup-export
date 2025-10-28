@@ -1,0 +1,23 @@
+{
+  "properties": [
+    {
+      "name": "eas.endpoint",
+      "type": "java.lang.String",
+      "description": "Description for eas.endpoint."
+    },
+    {
+      "name": "eas.username",
+      "type": "java.lang.String",
+      "description": "Description for eas.username."
+    },
+    {
+      "name": "eas.password",
+      "type": "java.lang.String",
+      "description": "Description for eas.password."
+    },
+    {
+      "name": "eas.apiKey",
+      "type": "java.lang.String",
+      "description": "Description for eas.apiKey."
+    }
+  ] }
