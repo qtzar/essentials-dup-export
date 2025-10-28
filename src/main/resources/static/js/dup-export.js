@@ -98,11 +98,14 @@ async function loadAvailableClasses() {
     try {
         const response = await fetch(`/api/dup/classes?repoId=${encodeURIComponent(selectedRepoId)}`);
         if (!response.ok) {
-            throw new Error('Failed to fetch classes');
+            const errorText = await response.text();
+            console.error('Server response:', response.status, errorText);
+            throw new Error(`Server returned ${response.status}: ${errorText || response.statusText}`);
         }
 
         // Response format: { "classes": { "CLASS_NAME_1": { "slots": { "Slot_1": {...}, ... } }, ... } }
         const data = await response.json();
+        console.log('Received data from API:', data);
 
         // Extract the classes object from the response
         classMetadata = data.classes || data;
@@ -134,13 +137,16 @@ async function loadAvailableClasses() {
 
     } catch (error) {
         console.error('Error loading classes:', error);
+        console.error('Error stack:', error.stack);
         classList.innerHTML = `
             <div class="no-classes">
-                <p>Error loading classes: ${error.message}</p>
+                <p><strong>Error loading classes:</strong></p>
+                <p style="color: #721c24; margin: 10px 0;">${error.message}</p>
+                <p style="font-size: 0.9em; color: #666;">Check the browser console for more details</p>
                 <button class="btn btn-info btn-small" onclick="loadAvailableClasses()">Retry</button>
             </div>
         `;
-        showStatus('Error loading classes from EAS', 'error');
+        showStatus(`Error loading classes: ${error.message}`, 'error');
     }
 }
 
@@ -484,7 +490,7 @@ function updateSelectedSummary() {
 }
 
 /**
- * Validate form and enable/disable generate button
+ * Validate form and enable/disable buttons
  */
 function validateForm() {
     const repoName = document.getElementById('repoName').value.trim();
@@ -493,6 +499,14 @@ function validateForm() {
 
     const generateBtn = document.getElementById('generateBtn');
     generateBtn.disabled = !(repoName && hasSelectedFields);
+
+    // Enable save button if there are selected fields
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = !hasSelectedFields;
+
+    // Enable load button only if a repository has been selected
+    const loadBtn = document.getElementById('loadBtn');
+    loadBtn.disabled = !selectedRepoId;
 }
 
 /**
@@ -689,4 +703,165 @@ function resetForm() {
         document.getElementById('exportStatus').className = 'export-status';
         validateForm();
     }
+}
+
+/**
+ * Save the current selection to a JSON file
+ */
+function saveSelection() {
+    const hasSelectedFields = Array.from(selectedClasses.values())
+        .some(data => data.fields.size > 0);
+
+    if (!hasSelectedFields) {
+        showStatus('No classes selected to save', 'error');
+        return;
+    }
+
+    // Build the selection object
+    const selection = {
+        version: '1.0',
+        savedAt: new Date().toISOString(),
+        repository: {
+            id: selectedRepoId,
+            name: repositories.find(r => r.repoId === selectedRepoId)?.name || selectedRepoId
+        },
+        classSelections: []
+    };
+
+    selectedClasses.forEach((classData, className) => {
+        if (classData.fields.size > 0) {
+            selection.classSelections.push({
+                className: className,
+                fields: Array.from(classData.fields).sort()
+            });
+        }
+    });
+
+    // Sort by class name for consistent output
+    selection.classSelections.sort((a, b) => a.className.localeCompare(b.className));
+
+    // Create and download JSON file
+    const json = JSON.stringify(selection, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const repoName = selection.repository.name.replace(/[^a-zA-Z0-9]/g, '_');
+    a.download = `dup-selection-${repoName}-${timestamp}.json`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
+    showStatus(`✅ Selection saved successfully!`, 'success');
+}
+
+/**
+ * Load a previously saved selection from a JSON file
+ */
+function loadSelection() {
+    if (!selectedRepoId) {
+        showStatus('Please select a repository first', 'error');
+        return;
+    }
+
+    // Create file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const selection = JSON.parse(text);
+
+            // Validate format
+            if (!selection.version || !selection.classSelections || !Array.isArray(selection.classSelections)) {
+                throw new Error('Invalid selection file format');
+            }
+
+            // Validate and load selections
+            const warnings = [];
+            const loaded = [];
+
+            selection.classSelections.forEach(classSelection => {
+                const className = classSelection.className;
+                const fields = classSelection.fields || [];
+
+                // Check if class exists in current repository
+                if (!classMetadata[className]) {
+                    warnings.push(`Class "${className}" not found in current repository`);
+                    return;
+                }
+
+                const classData = selectedClasses.get(className);
+                if (!classData) {
+                    warnings.push(`Class "${className}" could not be initialized`);
+                    return;
+                }
+
+                // Get available slots for this class
+                const availableSlots = classMetadata[className]?.slots || {};
+                const missingFields = [];
+
+                // Check each field
+                fields.forEach(fieldName => {
+                    if (availableSlots[fieldName]) {
+                        // Field exists, add it
+                        classData.fields.add(fieldName);
+                    } else {
+                        missingFields.push(fieldName);
+                    }
+                });
+
+                if (missingFields.length > 0) {
+                    warnings.push(`Class "${className}": Fields not found - ${missingFields.join(', ')}`);
+                }
+
+                if (classData.fields.size > 0) {
+                    loaded.push(`${className} (${classData.fields.size} fields)`);
+                }
+            });
+
+            // Update UI
+            renderClassList();
+            updateSelectedSummary();
+            validateForm();
+
+            // Show results
+            if (loaded.length === 0 && warnings.length > 0) {
+                showStatus('❌ No valid selections could be loaded. See console for details.', 'error');
+                console.error('Load warnings:', warnings);
+            } else if (warnings.length > 0) {
+                showStatus(`⚠️ Selection loaded with warnings. ${loaded.length} class(es) loaded. Check console for details.`, 'warning');
+                console.warn('Load warnings:', warnings);
+                console.info('Loaded classes:', loaded);
+            } else {
+                showStatus(`✅ Selection loaded successfully! ${loaded.length} class(es) loaded.`, 'success');
+            }
+
+            // Display warnings in a modal or alert
+            if (warnings.length > 0) {
+                setTimeout(() => {
+                    const warningMessage = warnings.length > 5
+                        ? `${warnings.length} warnings detected. First 5:\n\n${warnings.slice(0, 5).join('\n')}\n\nSee console for full details.`
+                        : `Warnings:\n\n${warnings.join('\n')}`;
+                    alert(warningMessage);
+                }, 500);
+            }
+
+        } catch (error) {
+            showStatus(`❌ Error loading selection: ${error.message}`, 'error');
+            console.error('Load error:', error);
+        }
+    };
+
+    input.click();
 }

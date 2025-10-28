@@ -415,6 +415,13 @@
     border: 1px solid #bee5eb;
 }
 
+.export-status.warning {
+    display: block;
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
 /* Loading States */
 .loading {
     text-align: center;

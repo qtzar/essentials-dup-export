@@ -1,3 +1,4 @@
 logging:
   level:
-    com.qtzar.essentialexport: INFO
+    com.qtzar.essentialexport: DEBUG
+    org.springframework.web.client: DEBUG

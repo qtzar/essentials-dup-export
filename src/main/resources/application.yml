@@ -4,7 +4,8 @@ spring:
 
 logging:
   level:
-    com.qtzar.essentialexport: ERROR
+    com.qtzar.essentialexport: DEBUG
+    org.springframework.web.client: DEBUG
 
 springdoc:
   swagger-ui:

@@ -18,6 +18,7 @@ import java.util.List;
 /**
  * Controller for DUP (Data Update Package) export operations.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/dup")
 @RequiredArgsConstructor
@@ -73,10 +74,14 @@ public class DUPExportController {
     @GetMapping("/classes")
     public ResponseEntity<Object> getClasses(@RequestParam String repoId) {
         try {
+            log.debug("Fetching classes metadata for repository: {}", repoId);
             Object classes = easClient.getClassesMetadata(repoId);
+            log.debug("Successfully fetched classes metadata");
             return ResponseEntity.ok(classes);
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            log.error("Error fetching classes metadata for repository {}: {}", repoId, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body("Error fetching classes: " + e.getMessage());
         }
     }
 

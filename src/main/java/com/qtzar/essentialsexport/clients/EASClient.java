@@ -3,6 +3,7 @@ package com.qtzar.essentialsexport.clients;
 import com.qtzar.essentialsexport.model.essential.request.BearerTokenBody;
 import com.qtzar.essentialsexport.model.essential.request.RefreshTokenBody;
 import com.qtzar.essentialsexport.model.essential.response.BearerTokenResponse;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -16,7 +17,7 @@ import java.util.List;
 
 @Service
 public class EASClient {
-    private final RestClient easRestClient;
+    private RestClient easRestClient;
 
     @Value("${eas.endpoint}")
     private String endpoint;
@@ -35,7 +36,8 @@ public class EASClient {
     private Instant authExpires = Instant.now().minus(1, ChronoUnit.MINUTES);
     private Instant refreshExpires = Instant.now().minus(1, ChronoUnit.MINUTES);
 
-    public EASClient() {
+    @PostConstruct
+    public void init() {
         easRestClient = RestClient.builder()
                 .baseUrl(endpoint)
                 .defaultHeader("User-Agent", "Essential Export Application")

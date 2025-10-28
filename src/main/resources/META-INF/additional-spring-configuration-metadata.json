@@ -19,5 +19,10 @@
       "name": "eas.apiKey",
       "type": "java.lang.String",
       "description": "Description for eas.apiKey."
+    },
+    {
+      "name": "eas.repositories",
+      "type": "java.lang.String",
+      "description": "Description for eas.repositories."
     }
   ] }

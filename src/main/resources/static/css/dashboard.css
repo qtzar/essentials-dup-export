@@ -113,6 +113,10 @@ body {
     background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
 }
 
+.btn-secondary {
+    background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
