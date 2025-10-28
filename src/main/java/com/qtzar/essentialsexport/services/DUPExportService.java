@@ -395,6 +395,28 @@ public class DUPExportService {
             case List list1 -> {
                 @SuppressWarnings("unchecked")
                 List<Object> list = (List<Object>) value;
+
+                // Special case: if list has exactly one element and it's a reference map,
+                // return just the record variable without list brackets
+                if (list.size() == 1) {
+                    Object singleElement = list.get(0);
+                    if (singleElement instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> elementMap = (Map<String, Object>) singleElement;
+                        if (elementMap.containsKey("id")) {
+                            Object idValue = elementMap.get("id");
+                            if (idValue instanceof String refId && idToRecordVar.containsKey(refId)) {
+                                // Return just the record variable, no list brackets
+                                return idToRecordVar.get(refId);
+                            }
+                        }
+                    } else if (singleElement instanceof String strId && idToRecordVar.containsKey(strId)) {
+                        // Single string ID that maps to a record variable
+                        return idToRecordVar.get(strId);
+                    }
+                }
+
+                // Normal case: process list elements
                 StringBuilder sb = new StringBuilder("[");
                 for (int i = 0; i < list.size(); i++) {
                     if (i > 0) sb.append(", ");
