@@ -1,0 +1,24 @@
+spring:
+  main:
+    web-application-type: Servlet
+
+logging:
+  level:
+    com.qtzar.essentialexport: ERROR
+
+springdoc:
+  swagger-ui:
+    validatorUrl: none
+
+eas:
+  endpoint: https://your-essential-instance.essentialintelligence.com/api
+  username: apiuser@yourdomain.dom
+  password: [PASSWORD_HERE]
+  apiKey: [YOUR_API_KEY]
+  repositories:
+    - name: "Production"
+      repoId: "[PRODUCTION_REPO_ID]"
+    - name: "Development"
+      repoId: "[DEVELOPMENT_REPO_ID]"
+    - name: "Test"
+      repoId: "[TEST_REPO_ID]"
