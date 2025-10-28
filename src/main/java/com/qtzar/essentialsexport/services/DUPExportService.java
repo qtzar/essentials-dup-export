@@ -407,10 +407,11 @@ public class DUPExportService {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> map = (Map<String, Object>) value;
 
-                // Check if this is a simple reference object with just an 'id' field
-                if (map.containsKey("id") && map.size() <= 2) {
-                    String refId = (String) map.get("id");
-                    if (refId != null) {
+                // Check if this is a reference object with an 'id' field
+                // These typically have id, name, and className fields
+                if (map.containsKey("id")) {
+                    Object idValue = map.get("id");
+                    if (idValue instanceof String refId) {
                         // Use record variable if available
                         if (idToRecordVar.containsKey(refId)) {
                             return idToRecordVar.get(refId);
